@@ -1,0 +1,182 @@
+
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>NEON RACER</title>
+<style>
+*{box-sizing:border-box}
+body{
+ margin:0;background:#070716;color:white;
+ font-family:Arial,sans-serif;text-align:center;
+}
+h1{color:#00f7ff;text-shadow:0 0 20px #00f7ff;letter-spacing:5px}
+#info{display:flex;justify-content:center;gap:30px;margin:15px}
+#info span{color:#ff35dc;font-size:22px}
+canvas{
+ width:min(94vw,400px);height:auto;
+ border:2px solid #00f7ff;
+ box-shadow:0 0 25px #00f7ff55;
+ display:block;margin:auto;
+}
+button{
+ background:#11152e;color:#00f7ff;
+ border:1px solid #00f7ff;padding:14px 20px;
+ margin:6px;border-radius:8px;font-size:16px;
+ cursor:pointer;touch-action:manipulation
+}
+#menu{margin:20px}
+</style>
+</head>
+<body>
+<h1>NEON RACER</h1>
+<div id="info">
+ <div>СЧЁТ<br><span id="score">0</span></div>
+ <div>РЕКОРД<br><span id="best">0</span></div>
+</div>
+
+<canvas id="c" width="400" height="600"></canvas>
+
+<div id="menu">
+ <h2 id="msg">🏎️ Готов к гонке?</h2>
+ <button id="start">▶ НАЧАТЬ</button>
+ <br>
+ <button id="left">⬅</button>
+ <button id="boost">⚡</button>
+ <button id="right">➡</button>
+ <p>Управление: ← → или A D. Ускорение: ↑</p>
+</div>
+
+<script>
+const c=document.querySelector("#c");
+const ctx=c.getContext("2d");
+const $=id=>document.getElementById(id);
+let car={x:200,y:490,w:36,h:62};
+let enemies=[],score=0,best=0;
+let playing=false,keys={},road=0,last=0,spawn=0;
+
+try{best=Number(localStorage.getItem("neonBest"))||0}catch(e){}
+$("best").textContent=best;
+
+function background(){
+ ctx.fillStyle="#080818";ctx.fillRect(0,0,400,600);
+ for(let i=0;i<13;i++){
+  let h=60+(i*37)%100;
+  ctx.fillStyle="#15132c";
+  ctx.fillRect(i*32,0,25,h);
+  for(let y=8;y<h;y+=16){
+   ctx.fillStyle=i%2?"#ff35dc":"#00f7ff";
+   ctx.fillRect(i*32+7,y,4,5);
+  }
+ }
+ ctx.fillStyle="#151529";ctx.fillRect(65,0,270,600);
+ ctx.shadowBlur=15;
+ ctx.shadowColor="#00f7ff";
+ ctx.fillStyle="#00f7ff";ctx.fillRect(63,0,3,600);
+ ctx.shadowColor="#ff35dc";
+ ctx.fillStyle="#ff35dc";ctx.fillRect(334,0,3,600);
+ ctx.shadowBlur=0;
+ road=(road+5)%80;
+ ctx.fillStyle="#7777a0";
+ for(let y=-80+road;y<600;y+=80){
+  ctx.fillRect(153,y,3,40);
+  ctx.fillRect(245,y,3,40);
+ }
+}
+
+function drawCar(x,y,color){
+ ctx.save();
+ ctx.shadowColor=color;ctx.shadowBlur=15;
+ ctx.fillStyle=color;
+ ctx.beginPath();
+ ctx.roundRect(x-18,y-31,36,62,7);ctx.fill();
+ ctx.shadowBlur=0;
+ ctx.fillStyle="#121a30";
+ ctx.fillRect(x-12,y-20,24,16);
+ ctx.fillRect(x-12,y+3,24,13);
+ ctx.fillStyle="#fff";
+ ctx.fillRect(x-14,y-28,7,4);
+ ctx.fillRect(x+7,y-28,7,4);
+ ctx.restore();
+}
+
+function reset(){
+ score=0;car.x=200;enemies=[];spawn=0;
+ $("score").textContent=0;
+}
+
+function start(){
+ reset();playing=true;
+ $("msg").textContent="Удачи! ⚡";
+ $("start").textContent="↻ ЗАНОВО";
+ last=performance.now();
+ requestAnimationFrame(loop);
+}
+
+function loop(now){
+ if(!playing)return;
+ let dt=Math.min((now-last)/16.67,2);last=now;
+ background();
+
+ let boost=keys.ArrowUp||keys.w||keys.W;
+ let speed=4+Math.min(score/150,6)+(boost?3:0);
+ if(keys.ArrowLeft||keys.a||keys.A)car.x-=5*dt;
+ if(keys.ArrowRight||keys.d||keys.D)car.x+=5*dt;
+ car.x=Math.max(87,Math.min(313,car.x));
+
+ score+=speed*.05*dt;
+ $("score").textContent=Math.floor(score);
+
+ spawn+=dt;
+ if(spawn>Math.max(24,58-score*.03)){
+  let lanes=[110,200,290];
+  enemies.push({
+   x:lanes[Math.floor(Math.random()*3)],
+   y:-60,color:["#ff35dc","#ff4444","#a855ff","#ffcc00"][Math.floor(Math.random()*4)]
+  });
+  spawn=0;
+ }
+
+ for(let e of enemies){
+  e.y+=speed*dt;
+  drawCar(e.x,e.y,e.color);
+  if(Math.abs(car.x-e.x)<29&&Math.abs(car.y-e.y)<48){
+   playing=false;
+   let result=Math.floor(score);
+   $("msg").textContent="💥 ГОНКА ОКОНЧЕНА! Счёт: "+result;
+   if(result>best){
+    best=result;$("best").textContent=best;
+    try{localStorage.setItem("neonBest",best)}catch(e){}
+   }
+   $("start").textContent="ИГРАТЬ СНОВА";
+   return;
+  }
+ }
+ enemies=enemies.filter(e=>e.y<660);
+ drawCar(car.x,car.y,"#00f7ff");
+ requestAnimationFrame(loop);
+}
+
+$("start").onclick=start;
+document.onkeydown=e=>{
+ keys[e.key]=true;
+ if(["ArrowLeft","ArrowRight","ArrowUp"," "].includes(e.key))e.preventDefault();
+};
+document.onkeyup=e=>keys[e.key]=false;
+
+function hold(id,key){
+ const b=$(id);
+ b.onpointerdown=e=>{e.preventDefault();keys[key]=true};
+ b.onpointerup=b.onpointerleave=b.onpointercancel=e=>{
+  keys[key]=false;
+ };
+}
+hold("left","ArrowLeft");
+hold("right","ArrowRight");
+hold("boost","ArrowUp");
+
+background();drawCar(car.x,car.y,"#00f7ff");
+</script>
+</body>
+</html>
